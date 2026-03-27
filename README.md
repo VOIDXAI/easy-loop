@@ -13,7 +13,9 @@ current repo.
   - `--max-iterations` is reached
   - the loop is cancelled
 
-## Requirements
+## Quick Start
+
+### Requirements
 
 - Codex CLI with plugin support
 - `bash`
@@ -23,7 +25,7 @@ current repo.
 - `git` for `--repo-url` installs
 - macOS, Linux, or WSL
 
-## Install From A Local Clone
+### Install from a local clone
 
 ```bash
 git clone https://github.com/VOIDXAI/easy-loop.git ~/.codex/plugins/easy-loop
@@ -38,29 +40,75 @@ directly from that checkout and let it copy the plugin into
 bash ./install.sh
 ```
 
-## Install Via A Bootstrap Script
-
-For a one-line install, use the published `install.sh` plus the git repo URL:
+### Install via a bootstrap script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/VOIDXAI/easy-loop/main/install.sh | \
   bash -s -- --repo-url https://github.com/VOIDXAI/easy-loop.git
 ```
 
-## Start A Loop
+### Start a loop
 
-The recommended path is to mention `$easy-loop` in Codex and let the skill
-guide the setup for the current session. When the current Codex runtime exposes
-`request_user_input`, the skill should use it for compact action and option
-pickers. When that tool is not available in the current mode or client, the
-skill should fall back to short plain-text questions. In both cases it should
-ask only for missing details, generate a compact startup draft from the task
-plus any inferred scope or finish condition, let the user confirm or tweak that
-draft, recommend `max-iterations` when it can estimate the workload, fall back
-to `20` only when it cannot estimate responsibly, generate a unique completion
-promise, and then call `setup.sh`.
+In a Codex session, ask for a concrete task with `$easy-loop <task goal>`.
 
-### Complete Skill Example
+```text
+$easy-loop Update README.md with a complete skill-trigger example, then run bash tests/smoke.sh until it passes.
+```
+
+The recommended path is to let the skill guide setup for the current session.
+When the current Codex runtime exposes `request_user_input`, the skill should
+use it for compact action and option pickers. When that tool is not available in
+the current mode or client, the skill should fall back to short plain-text
+questions. In both cases it should ask only for missing details, generate a
+compact startup draft from the task plus any inferred scope or finish
+condition, let the user confirm or tweak that draft, recommend
+`max-iterations` when it can estimate the workload, fall back to `20` only when
+it cannot estimate responsibly, generate a unique completion promise, and then
+call `setup.sh`.
+
+### Check status
+
+```text
+$easy-loop status
+```
+
+### Cancel the loop
+
+```text
+$easy-loop cancel
+```
+
+## How It Works
+
+Easy Loop combines four parts:
+
+1. **The plugin / skill layer** interprets `$easy-loop ...` requests.
+2. **`setup.sh`** creates per-session state and activates the loop.
+3. **The Codex `Stop` hook** intercepts normal completion.
+4. **Session state on disk** decides whether to continue, stop, or cancel.
+
+A simplified flow looks like this:
+
+```text
+User task
+  -> Codex skill/plugin
+  -> setup.sh
+  -> .codex/easy-loop/<session_id>/state.md
+  -> Codex works on the repo
+  -> Stop hook fires on normal completion
+  -> Easy Loop checks promise / iteration budget / cancel state
+  -> continue same prompt or stop cleanly
+```
+
+Each Codex session gets its own state directory:
+
+- `.codex/easy-loop/<session_id>/state.md`
+- `.codex/easy-loop/<session_id>/iterations.jsonl`
+
+That allows multiple Codex sessions in the same repo to run independent Easy
+Loop sessions without touching each other.
+
+## Complete Skill Example
 
 The skill treats the three forms below as different actions:
 
@@ -116,7 +164,7 @@ Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iteration
 Recent per-iteration timings:
 - iteration 1: continued (18342 ms)
 
-If you need to stop early in that same session:
+If you need to stop early in that same Codex session:
 User:
 $easy-loop cancel
 
@@ -141,9 +189,10 @@ of `$easy-loop status`, `$easy-loop cancel`, or `$easy-loop <task goal>`. If
 the current session already has Easy Loop state on disk, the skill should
 inspect that state before suggesting a restart.
 
-If you want to start a loop manually from the shell, run:
+## Manual shell startup
 
-From the repo you want Codex to work on:
+If you want to start a loop manually from the shell, run this from the repo you
+want Codex to work on:
 
 ```bash
 export CODEX_THREAD_ID=<current-codex-session-id>
@@ -158,14 +207,6 @@ active Codex session that owns the loop. If you omit `--max-iterations`,
 `setup.sh` leaves the loop unlimited; the `20` above is only an example value,
 not a hardcoded runtime default.
 
-Each Codex session gets its own state directory:
-
-- `.codex/easy-loop/<session_id>/state.md`
-- `.codex/easy-loop/<session_id>/iterations.jsonl`
-
-That allows multiple Codex sessions in the same repo to run independent Easy
-Loop sessions without touching each other.
-
 Then keep working in the same Codex session. The Stop hook will continue the
 loop automatically.
 
@@ -175,10 +216,56 @@ restart. If the user later sends a bare `$easy-loop` and the current session
 already has state on disk, the skill should inspect status first before
 suggesting a new loop.
 
-Note: in OpenAI's open-source Codex codebase, the structured interaction
-capability is named `request_user_input`. Availability can vary by collaboration
-mode and runtime configuration, so the plugin should degrade gracefully instead
-of assuming it always exists.
+## Troubleshooting
+
+### `CODEX_THREAD_ID` is missing
+
+Most likely cause: manual startup is happening outside the active Codex session
+that owns the loop.
+
+First check:
+- confirm you are launching `setup.sh` from the intended Codex session
+- confirm `CODEX_THREAD_ID` is exported in that shell before starting the loop
+
+### The plugin seems installed but Easy Loop is not available
+
+Most likely cause: plugin install completed, but Codex config / marketplace /
+cache state is incomplete or stale.
+
+First check:
+- rerun `install.sh`
+- inspect `~/.codex/config.toml`
+- inspect `~/.agents/plugins/marketplace.json`
+- inspect the plugin cache under `~/.codex/plugins/cache/`
+
+### The hook is not firing
+
+Most likely cause: Codex hooks are not enabled, or `hooks.json` was not updated
+as expected.
+
+First check:
+- inspect `~/.codex/hooks.json`
+- confirm `features.codex_hooks = true`
+- rerun the smoke test to validate hook behavior end-to-end
+
+### `request_user_input` is unavailable
+
+Most likely cause: the current Codex collaboration mode or runtime does not
+expose structured interaction tools.
+
+Expected behavior:
+- Easy Loop should degrade gracefully to short plain-text prompts instead of
+  assuming structured interaction is always available
+
+### Status exists on disk, but the loop is not active
+
+Most likely cause: the last run ended normally, hit max iterations, or was
+cancelled, and the session state was intentionally preserved for inspection.
+
+First check:
+- inspect `.codex/easy-loop/<session_id>/state.md`
+- inspect `.codex/easy-loop/<session_id>/iterations.jsonl`
+- start a fresh loop only after confirming the old state is terminal
 
 ## Cancel A Loop
 
@@ -198,6 +285,22 @@ Cancel another Codex session's loop explicitly:
 bash ~/.codex/plugins/easy-loop/scripts/cancel.sh --session-id <session-id> --force
 ```
 
+## Compatibility
+
+Easy Loop currently assumes:
+
+- macOS, Linux, or WSL
+- a shell environment with `bash`, `jq`, `perl`, `python3`, and `git`
+- Codex plugin support is available
+- Codex hooks are available and enabled
+- some Codex runtimes may expose `request_user_input`, but the plugin should
+  not depend on it unconditionally
+
+Note: in OpenAI's open-source Codex codebase, the structured interaction
+capability is named `request_user_input`. Availability can vary by collaboration
+mode and runtime configuration, so the plugin should degrade gracefully instead
+of assuming it always exists.
+
 ## Installed Paths
 
 - plugin source: `~/.codex/plugins/easy-loop`
@@ -216,9 +319,9 @@ bash ~/.codex/plugins/easy-loop/scripts/cancel.sh --session-id <session-id> --fo
   `features.codex_hooks = true`.
 - The installer also enables the plugin in `config.toml` and installs it into
   the Codex plugin cache so it is immediately usable.
-- The plugin is the distribution layer. Easy Loop still depends on a
-  separate `Stop` hook in `hooks.json`, because hooks are not part of the
-  documented plugin component set yet.
+- The plugin is the distribution layer. Easy Loop still depends on a separate
+  `Stop` hook in `hooks.json`, because hooks are not part of the documented
+  plugin component set yet.
 - New loops write per-session state to `.codex/easy-loop/<session_id>/`.
 - Terminal state is preserved on disk so the current session can inspect its
   last run; the next `setup.sh` for that same session clears the previous run
