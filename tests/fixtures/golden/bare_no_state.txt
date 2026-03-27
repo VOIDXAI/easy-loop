@@ -1,0 +1,9 @@
+User:
+$easy-loop
+
+Codex:
+This session does not have an Easy Loop state file yet.
+Reply with one of:
+- `$easy-loop status`
+- `$easy-loop cancel`
+- `$easy-loop <task goal>`

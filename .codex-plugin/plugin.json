@@ -1,0 +1,28 @@
+{
+  "name": "easy-loop",
+  "version": "0.2.0",
+  "description": "A Stop-hook powered Easy Loop for Codex CLI that keeps retrying the same task until a promise or iteration limit is reached.",
+  "keywords": [
+    "codex",
+    "hooks",
+    "automation"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Easy Loop",
+    "shortDescription": "Iterative self-loop for Codex",
+    "longDescription": "Runs an Easy Loop inside Codex using a Stop hook, persistent task state, and repeatable completion conditions.",
+    "developerName": "Open Source",
+    "category": "Development",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use Easy Loop to start or inspect the loop for this Codex session, asking for only the missing setup details.",
+      "Start an Easy Loop for this repo with safe defaults, a unique completion promise, and a truthful finish condition.",
+      "Explain whether this task is a good fit for Easy Loop before starting one, and show the current session status if a loop already exists."
+    ],
+    "brandColor": "#0F766E"
+  }
+}
