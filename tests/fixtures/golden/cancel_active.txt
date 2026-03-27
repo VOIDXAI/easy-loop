@@ -1,0 +1,14 @@
+User:
+$easy-loop cancel
+
+Codex:
+I ran:
+bash ~/.codex/plugins/easy-loop/scripts/cancel.sh
+
+Cancelled the active Easy Loop for session 019d2e0c-05a0-7fc2-9550-256dc58e2ca8.
+Easy Loop summary.
+Status: cancelled
+Iteration records: 2
+Per-iteration:
+  - iteration 1: continued (18342 ms)
+  - iteration 2: cancelled (9411 ms)
