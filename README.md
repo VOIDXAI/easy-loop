@@ -55,16 +55,13 @@ In a Codex session, ask for a concrete task with `$easy-loop <task goal>`.
 $easy-loop Update README.md with a complete skill-trigger example, then run bash tests/smoke.sh until it passes.
 ```
 
-The recommended path is to let the skill guide setup for the current session.
-When the current Codex runtime exposes `request_user_input`, the skill should
-use it for compact action and option pickers. When that tool is not available in
-the current mode or client, the skill should fall back to short plain-text
-questions. In both cases it should ask only for missing details, generate a
-compact startup draft from the task plus any inferred scope or finish
-condition, let the user confirm or tweak that draft, recommend
-`max-iterations` when it can estimate the workload, fall back to `20` only when
-it cannot estimate responsibly, generate a unique completion promise, and then
-call `setup.sh`.
+The shortest path is:
+- ask for a concrete task with `$easy-loop <task goal>`
+- confirm the generated startup draft
+- let Easy Loop keep iterating in the same Codex session
+
+For the full behavior around `request_user_input`, startup drafts, completion
+promises, and `max-iterations`, see the detailed example below.
 
 ### Check status
 
@@ -108,7 +105,7 @@ Each Codex session gets its own state directory:
 That allows multiple Codex sessions in the same repo to run independent Easy
 Loop sessions without touching each other.
 
-## Complete Skill Example
+### Complete Skill Example
 
 The skill treats the three forms below as different actions:
 
