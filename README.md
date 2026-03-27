@@ -3,7 +3,6 @@
 `easy-loop` is an official-layout personal Codex plugin plus Stop-hook
 bootstrap that turns Codex into a persistent iterative loop runner for the
 current repo.
-Temporary test text for Easy Loop smoke verification.
 
 ## What It Does
 
@@ -27,7 +26,7 @@ Temporary test text for Easy Loop smoke verification.
 ## Install From A Local Clone
 
 ```bash
-git clone <your-repo-url> ~/.codex/plugins/easy-loop
+git clone https://github.com/VOIDXAI/easy-loop.git ~/.codex/plugins/easy-loop
 bash ~/.codex/plugins/easy-loop/install.sh
 ```
 
@@ -41,12 +40,11 @@ bash ./install.sh
 
 ## Install Via A Bootstrap Script
 
-After publishing this repo, a one-line install can use the raw `install.sh` plus
-the git repo URL:
+For a one-line install, use the published `install.sh` plus the git repo URL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh | \
-  bash -s -- --repo-url https://github.com/<owner>/<repo>.git
+curl -fsSL https://raw.githubusercontent.com/VOIDXAI/easy-loop/main/install.sh | \
+  bash -s -- --repo-url https://github.com/VOIDXAI/easy-loop.git
 ```
 
 ## Start A Loop
@@ -232,8 +230,8 @@ bash ~/.codex/plugins/easy-loop/scripts/cancel.sh --session-id <session-id> --fo
 - The completion promise must only be emitted when it is fully true.
 - Always prefer setting `--max-iterations` even when a completion promise
   exists.
-- Before publishing to GitHub, update `.codex-plugin/plugin.json` with your
-  final project metadata if you want marketplace-ready branding fields.
+- If you fork or rebrand this project, update `.codex-plugin/plugin.json` with
+  your own marketplace metadata before republishing it.
 
 ## Validate Locally
 
