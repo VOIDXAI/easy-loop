@@ -33,6 +33,7 @@ Scenarios:
   status_terminal
   status_active
   cancel_active
+  duplicate_message_payload
 EOF
 }
 
@@ -121,6 +122,7 @@ ORIGINAL_SETUP_BACKUP="$TMPROOT/setup.sh.original"
 ORIGINAL_CANCEL_BACKUP="$TMPROOT/cancel.sh.original"
 cp "$PLUGIN_ROOT/scripts/setup.sh" "$ORIGINAL_SETUP_BACKUP"
 cp "$PLUGIN_ROOT/scripts/cancel.sh" "$ORIGINAL_CANCEL_BACKUP"
+cp "$PLUGIN_ROOT/scripts/common.sh" "$TMPROOT/common.sh"
 
 cat >"$PLUGIN_ROOT/scripts/setup.sh" <<EOF
 #!/usr/bin/env bash
@@ -192,6 +194,7 @@ last_iteration_elapsed_ms: 0
 total_elapsed_ms: 0
 last_event: completed
 last_hook_fingerprint: null
+last_transcript_turn_fingerprint: null
 last_assistant_excerpt: null
 ---
 \${PROMPT}
@@ -442,6 +445,7 @@ last_iteration_elapsed_ms: {last_iteration_elapsed_ms}
 total_elapsed_ms: {total_elapsed_ms}
 last_event: {last_event}
 last_hook_fingerprint: null
+last_transcript_turn_fingerprint: null
 last_assistant_excerpt: {excerpt_raw}
 ---
 {prompt}
@@ -610,6 +614,44 @@ run_scenario_cancel_active() {
   echo "live e2e passed: cancel_active"
 }
 
+run_scenario_duplicate_message_payload() {
+  local repo thread_id payload state_file iterations_file first_output second_output
+  repo="$(new_repo duplicate_message_payload)"
+  thread_id="$(prime_session "$repo" duplicate_message_payload_prime)"
+  write_state_file "$repo" "$thread_id" true active 1 5 DONE \
+    2026-03-27T00:00:00Z "" 2026-03-27T00:00:00Z 2026-03-27T00:00:00Z null 0 started \
+    "Keep working" ""
+
+  payload="$(jq -nc --arg session_id "$thread_id" --arg last_assistant_message "Still working" --arg transcript_path "" '{session_id: $session_id, last_assistant_message: $last_assistant_message, transcript_path: $transcript_path}')"
+  state_file="$repo/.codex/easy-loop/$thread_id/state.md"
+  iterations_file="$repo/.codex/easy-loop/$thread_id/iterations.jsonl"
+
+  (
+    cd "$repo"
+    first_output="$(printf '%s' "$payload" | bash "$PLUGIN_ROOT/scripts/stop-hook.sh")"
+    if [[ "$(printf '%s' "$first_output" | jq -r '.decision')" != "block" ]]; then
+      echo "Assertion failed: first duplicate payload probe should continue the loop once" >&2
+      exit 1
+    fi
+
+    sleep 3
+    second_output="$(printf '%s' "$payload" | bash "$PLUGIN_ROOT/scripts/stop-hook.sh")"
+    if [[ -n "$second_output" ]]; then
+      echo "Assertion failed: repeated message-only payload should be ignored after the first continuation" >&2
+      printf '%s\n' "$second_output" >&2
+      exit 1
+    fi
+  )
+
+  assert_contains_regex "$state_file" '^iteration:\s*2$' 'duplicate payload should not advance iteration twice'
+  if [[ "$(wc -l <"$iterations_file" | tr -d '[:space:]')" -ne 1 ]]; then
+    echo "Assertion failed: duplicate payload should record exactly one continued iteration" >&2
+    sed -n '1,80p' "$iterations_file" >&2 || true
+    exit 1
+  fi
+  echo "live e2e passed: duplicate_message_payload"
+}
+
 should_run() {
   local name="$1"
   local scenario
@@ -646,6 +688,10 @@ fi
 
 if should_run cancel_active; then
   run_scenario_cancel_active
+fi
+
+if should_run duplicate_message_payload; then
+  run_scenario_duplicate_message_payload
 fi
 
 echo "live e2e passed"

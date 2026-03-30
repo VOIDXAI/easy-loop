@@ -14,6 +14,24 @@ WORK_DIR="$TMPROOT/work/repo"
 
 mkdir -p "$CODEX_HOME_DIR" "$AGENTS_HOME_DIR" "$WORK_DIR"
 
+cat >"$CODEX_HOME_DIR/hooks.json" <<'EOF'
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/existing-stop-hook.sh",
+            "statusMessage": "Easy Loop stop hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+
 python3 -m py_compile "$ROOT_DIR/scripts/bootstrap.py"
 bash -n "$ROOT_DIR/install.sh"
 bash -n "$ROOT_DIR/uninstall.sh"
@@ -38,8 +56,9 @@ bash "$ROOT_DIR/tests/golden_transcripts.sh" --root "$CACHE_ROOT" >/dev/null
 
 test "$(jq -r '.plugins[0].name' "$AGENTS_HOME_DIR/plugins/marketplace.json")" = "easy-loop"
 test "$(jq -r '.plugins[0].source.path' "$AGENTS_HOME_DIR/plugins/marketplace.json")" = "./.codex/plugins/easy-loop"
-test "$(jq -r '.hooks.Stop[0].hooks[0].statusMessage' "$CODEX_HOME_DIR/hooks.json")" = "Easy Loop stop hook"
-test "$(jq -r '.hooks.Stop[0].hooks[0].command' "$CODEX_HOME_DIR/hooks.json")" = "$PLUGIN_ROOT/scripts/stop-hook.sh"
+test "$(jq '[.hooks.Stop[].hooks[] | select(.command == "/tmp/existing-stop-hook.sh")] | length' "$CODEX_HOME_DIR/hooks.json")" = "1"
+test "$(jq '[.hooks.Stop[].hooks[] | select(.command == "'"$PLUGIN_ROOT"'/scripts/stop-hook.sh")] | length' "$CODEX_HOME_DIR/hooks.json")" = "1"
+test "$(jq '[.hooks.Stop[].hooks[] | select(.statusMessage == "Easy Loop stop hook")] | length' "$CODEX_HOME_DIR/hooks.json")" = "2"
 test -f "$CODEX_HOME_DIR/plugins/cache/local/easy-loop/local/.codex-plugin/plugin.json"
 
 grep -q 'plugins = true' "$CODEX_HOME_DIR/config.toml"
@@ -47,6 +66,11 @@ grep -q 'codex_hooks = true' "$CODEX_HOME_DIR/config.toml"
 grep -q '\[plugins."easy-loop@local"\]' "$CODEX_HOME_DIR/config.toml"
 
 cd "$WORK_DIR"
+
+if env -u CODEX_THREAD_ID -u CODEX_SESSION_ID bash "$PLUGIN_ROOT/scripts/setup.sh" "missing session id" >/dev/null 2>&1; then
+  echo "Smoke test failed: setup.sh should require CODEX_THREAD_ID." >&2
+  exit 1
+fi
 
 SESSION_ONE_DIR=".codex/easy-loop/test-session"
 SESSION_TWO_DIR=".codex/easy-loop/other-session"
@@ -83,8 +107,15 @@ if CODEX_THREAD_ID=test-session bash "$PLUGIN_ROOT/scripts/setup.sh" "should fai
   exit 1
 fi
 
+if CODEX_THREAD_ID=test-session bash "$PLUGIN_ROOT/scripts/cancel.sh" --session-id other-session >/dev/null 2>&1; then
+  echo "Smoke test failed: cross-session cancel should require --force." >&2
+  exit 1
+fi
+
+DUPLICATE_MESSAGE_PAYLOAD='{"session_id":"test-session","last_assistant_message":"Still working","transcript_path":""}'
+
 HOOK_BLOCK_OUTPUT="$(
-  printf '%s' '{"session_id":"test-session","last_assistant_message":"Still working","transcript_path":""}' |
+  printf '%s' "$DUPLICATE_MESSAGE_PAYLOAD" |
     bash "$PLUGIN_ROOT/scripts/stop-hook.sh"
 )"
 test "$(printf '%s' "$HOOK_BLOCK_OUTPUT" | jq -r '.decision')" = "block"
@@ -92,6 +123,15 @@ test "$(printf '%s' "$HOOK_BLOCK_OUTPUT" | jq -r '.reason')" = "Fix the tests"
 grep -q '^iteration: 2$' "$SESSION_ONE_DIR/state.md"
 grep -q '^iteration: 1$' "$SESSION_TWO_DIR/state.md"
 test "$(jq -r '.event' "$SESSION_ONE_DIR/iterations.jsonl")" = "continued"
+
+sleep 3
+DUPLICATE_REPLAY_OUTPUT="$(
+  printf '%s' "$DUPLICATE_MESSAGE_PAYLOAD" |
+    bash "$PLUGIN_ROOT/scripts/stop-hook.sh"
+)"
+test -z "$DUPLICATE_REPLAY_OUTPUT"
+grep -q '^iteration: 2$' "$SESSION_ONE_DIR/state.md"
+test "$(jq -s 'length' "$SESSION_ONE_DIR/iterations.jsonl")" = "1"
 
 printf '%s' '{"session_id":"test-session","last_assistant_message":"Finished the fix. <promise>DONE</promise>","transcript_path":""}' |
   bash "$PLUGIN_ROOT/scripts/stop-hook.sh" >/dev/null
@@ -231,6 +271,7 @@ bash "$PLUGIN_ROOT/uninstall.sh" \
   --agents-home "$AGENTS_HOME_DIR" >/dev/null
 
 test "$(jq '[.plugins[] | select(.name == "easy-loop")] | length' "$AGENTS_HOME_DIR/plugins/marketplace.json")" = "0"
-test "$(jq '(.hooks.Stop // []) | length' "$CODEX_HOME_DIR/hooks.json")" = "0"
+test "$(jq '[.hooks.Stop[].hooks[] | select(.command == "/tmp/existing-stop-hook.sh")] | length' "$CODEX_HOME_DIR/hooks.json")" = "1"
+test "$(jq '[.hooks.Stop[].hooks[] | select(.command == "'"$PLUGIN_ROOT"'/scripts/stop-hook.sh")] | length' "$CODEX_HOME_DIR/hooks.json")" = "0"
 
 echo "smoke test passed"

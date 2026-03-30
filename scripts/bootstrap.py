@@ -268,7 +268,7 @@ def merge_hooks(hooks_path: Path, stop_hook_command: str) -> None:
                 continue
             if entry.get("type") != "command":
                 continue
-            if entry.get("command") == stop_hook_command or entry.get("statusMessage") == PLUGIN_STATUS_MESSAGE:
+            if entry.get("command") == stop_hook_command:
                 entry["command"] = stop_hook_command
                 entry["statusMessage"] = PLUGIN_STATUS_MESSAGE
                 found = True
@@ -316,7 +316,7 @@ def remove_hooks(hooks_path: Path, stop_hook_command: str) -> None:
             if entry.get("type") != "command":
                 cleaned_hooks.append(entry)
                 continue
-            if entry.get("command") == stop_hook_command or entry.get("statusMessage") == PLUGIN_STATUS_MESSAGE:
+            if entry.get("command") == stop_hook_command:
                 continue
             cleaned_hooks.append(entry)
         if cleaned_hooks:

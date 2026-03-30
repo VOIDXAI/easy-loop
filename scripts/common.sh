@@ -305,6 +305,7 @@ terminalize_state_file() {
   local final_total_elapsed_ms="$5"
   local excerpt_raw="$6"
   local last_hook_fingerprint_raw="${7:-}"
+  local last_transcript_turn_fingerprint_raw="${8:-}"
 
   local updates=(
     "active=false"
@@ -319,6 +320,10 @@ terminalize_state_file() {
 
   if [[ -n "$last_hook_fingerprint_raw" ]]; then
     updates+=("last_hook_fingerprint=${last_hook_fingerprint_raw}")
+  fi
+
+  if [[ -n "$last_transcript_turn_fingerprint_raw" ]]; then
+    updates+=("last_transcript_turn_fingerprint=${last_transcript_turn_fingerprint_raw}")
   fi
 
   rewrite_frontmatter_batch "$state_file" "${updates[@]}"

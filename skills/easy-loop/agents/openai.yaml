@@ -1,4 +1,4 @@
 interface:
   display_name: "Easy Loop"
   short_description: "Start, inspect, or cancel Easy Loop sessions"
-  default_prompt: "Use $easy-loop to start, inspect, or cancel an Easy Loop session for this repo task."
+  default_prompt: "Use $easy-loop to start, inspect, or cancel an Easy Loop session for this repo task. Check existing session state first, only ask for missing details, require the literal word confirm before setup.sh, and keep replies in the documented startup, status, and cancel formats."

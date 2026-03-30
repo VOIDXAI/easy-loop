@@ -89,6 +89,19 @@ extract_promise_text() {
   '
 }
 
+fingerprint_normalized_text() {
+  local text="$1"
+  local normalized
+
+  normalized="$(printf '%s' "$text" | normalize_spaces)"
+  if [[ -z "$normalized" ]]; then
+    printf ''
+    return 0
+  fi
+
+  printf '%s' "$normalized" | sha256_text
+}
+
 terminalize_and_exit() {
   local final_status="$1"
   local message="$2"
@@ -96,6 +109,7 @@ terminalize_and_exit() {
   local final_total_elapsed_ms="$4"
   local excerpt_raw="$5"
   local last_hook_fingerprint_raw="${6:-}"
+  local last_transcript_turn_fingerprint_raw="${7:-}"
 
   terminalize_state_file \
     "$STATE_FILE" \
@@ -104,7 +118,8 @@ terminalize_and_exit() {
     "$final_iteration_elapsed_ms" \
     "$final_total_elapsed_ms" \
     "$excerpt_raw" \
-    "$last_hook_fingerprint_raw"
+    "$last_hook_fingerprint_raw" \
+    "$last_transcript_turn_fingerprint_raw"
 
   if [[ -n "$message" ]]; then
     printf '%s\n' "$message" >&2
@@ -155,6 +170,7 @@ CURRENT_ITERATION_STARTED_AT_RAW="$(frontmatter_value "$STATE_FILE" "current_ite
 LAST_TRANSITION_AT_RAW="$(frontmatter_value "$STATE_FILE" "last_transition_at")"
 LAST_EVENT_RAW="$(frontmatter_value "$STATE_FILE" "last_event")"
 LAST_HOOK_FINGERPRINT_RAW="$(frontmatter_value "$STATE_FILE" "last_hook_fingerprint")"
+LAST_TRANSCRIPT_TURN_FINGERPRINT_RAW="$(frontmatter_value "$STATE_FILE" "last_transcript_turn_fingerprint")"
 
 ITERATION="${ITERATION_RAW:-}"
 MAX_ITERATIONS="${MAX_ITERATIONS_RAW:-}"
@@ -165,6 +181,7 @@ CURRENT_ITERATION_STARTED_AT="$(decode_json_string "$CURRENT_ITERATION_STARTED_A
 LAST_TRANSITION_AT="$(decode_json_string "$LAST_TRANSITION_AT_RAW")"
 LAST_EVENT="${LAST_EVENT_RAW:-}"
 LAST_HOOK_FINGERPRINT="$(decode_json_string "$LAST_HOOK_FINGERPRINT_RAW")"
+LAST_TRANSCRIPT_TURN_FINGERPRINT="$(decode_json_string "$LAST_TRANSCRIPT_TURN_FINGERPRINT_RAW")"
 NOW="$(timestamp_now)"
 
 if [[ -n "$STATE_SESSION" && "$STATE_SESSION" != "$HOOK_SESSION" ]]; then
@@ -182,25 +199,25 @@ fi
 
 LAST_OUTPUT_EXCERPT="$(printf '%s' "$LAST_OUTPUT" | excerpt_text)"
 LAST_OUTPUT_EXCERPT_RAW="$(json_string_or_null "$LAST_OUTPUT_EXCERPT")"
-HOOK_FINGERPRINT_KIND=""
-HOOK_FINGERPRINT_SOURCE="$(extract_last_assistant_transcript_line "$TRANSCRIPT_PATH")"
-if [[ -n "$HOOK_FINGERPRINT_SOURCE" ]]; then
-  HOOK_FINGERPRINT_KIND="transcript"
-elif [[ -n "$LAST_OUTPUT" ]]; then
-  HOOK_FINGERPRINT_KIND="message"
-  HOOK_FINGERPRINT_SOURCE="$LAST_OUTPUT"
-fi
+LAST_ASSISTANT_TRANSCRIPT_LINE="$(extract_last_assistant_transcript_line "$TRANSCRIPT_PATH")"
+LAST_OUTPUT_NORMALIZED="$(printf '%s' "$LAST_OUTPUT" | normalize_spaces)"
 
 HOOK_FINGERPRINT=""
 HOOK_FINGERPRINT_RAW="null"
-if [[ -n "$HOOK_FINGERPRINT_SOURCE" ]]; then
-  HOOK_FINGERPRINT="$(printf '%s' "$HOOK_FINGERPRINT_SOURCE" | sha256_text)"
+if [[ -n "$LAST_OUTPUT_NORMALIZED" ]]; then
+  HOOK_FINGERPRINT="$(fingerprint_normalized_text "$LAST_OUTPUT")"
   HOOK_FINGERPRINT_RAW="$(json_quote "$HOOK_FINGERPRINT")"
+fi
+
+TRANSCRIPT_TURN_FINGERPRINT=""
+TRANSCRIPT_TURN_FINGERPRINT_RAW="null"
+if [[ -n "$LAST_ASSISTANT_TRANSCRIPT_LINE" ]]; then
+  TRANSCRIPT_TURN_FINGERPRINT="$(printf '%s' "$LAST_ASSISTANT_TRANSCRIPT_LINE" | sha256_text)"
+  TRANSCRIPT_TURN_FINGERPRINT_RAW="$(json_quote "$TRANSCRIPT_TURN_FINGERPRINT")"
 fi
 
 LAST_USER_TEXT="$(extract_last_user_text "$TRANSCRIPT_PATH")"
 LAST_USER_TEXT_NORMALIZED="$(printf '%s' "$LAST_USER_TEXT" | normalize_spaces)"
-LAST_OUTPUT_NORMALIZED="$(printf '%s' "$LAST_OUTPUT" | normalize_spaces)"
 
 if [[ "$LAST_USER_TEXT_NORMALIZED" == '$easy-loop status' || "$LAST_USER_TEXT_NORMALIZED" == '$easy-loop' ]]; then
   exit 0
@@ -259,15 +276,12 @@ fi
 CURRENT_ITERATION_ELAPSED_MS="$(elapsed_ms_between "$CURRENT_ITERATION_STARTED_AT" "$NOW")"
 TOTAL_ELAPSED_MS="$(elapsed_ms_between "$STARTED_AT" "$NOW")"
 
-if [[ -n "$HOOK_FINGERPRINT" && "$HOOK_FINGERPRINT" == "$LAST_HOOK_FINGERPRINT" ]]; then
-  if [[ "$HOOK_FINGERPRINT_KIND" == "transcript" ]]; then
+if [[ -n "$TRANSCRIPT_TURN_FINGERPRINT" ]]; then
+  if [[ "$TRANSCRIPT_TURN_FINGERPRINT" == "$LAST_TRANSCRIPT_TURN_FINGERPRINT" ]]; then
     exit 0
   fi
-
-  LAST_TRANSITION_ELAPSED_MS="$(elapsed_ms_between "$LAST_TRANSITION_AT" "$NOW")"
-  if [[ "$LAST_EVENT" == "continued" && "$LAST_TRANSITION_ELAPSED_MS" =~ ^[0-9]+$ && "$LAST_TRANSITION_ELAPSED_MS" -le 2000 ]]; then
-    exit 0
-  fi
+elif [[ -n "$HOOK_FINGERPRINT" && "$HOOK_FINGERPRINT" == "$LAST_HOOK_FINGERPRINT" ]]; then
+  exit 0
 fi
 
 if [[ -n "$COMPLETION_PROMISE" ]]; then
@@ -289,7 +303,8 @@ if [[ -n "$COMPLETION_PROMISE" ]]; then
         "$CURRENT_ITERATION_ELAPSED_MS" \
         "$TOTAL_ELAPSED_MS" \
         "$LAST_OUTPUT_EXCERPT_RAW" \
-        "$HOOK_FINGERPRINT_RAW"
+        "$HOOK_FINGERPRINT_RAW" \
+        "$TRANSCRIPT_TURN_FINGERPRINT_RAW"
     fi
   fi
 fi
@@ -308,7 +323,8 @@ if [[ "$MAX_ITERATIONS" -gt 0 && "$ITERATION" -ge "$MAX_ITERATIONS" ]]; then
     "$CURRENT_ITERATION_ELAPSED_MS" \
     "$TOTAL_ELAPSED_MS" \
     "$LAST_OUTPUT_EXCERPT_RAW" \
-    "$HOOK_FINGERPRINT_RAW"
+    "$HOOK_FINGERPRINT_RAW" \
+    "$TRANSCRIPT_TURN_FINGERPRINT_RAW"
 fi
 
 PROMPT_TEXT="$(extract_prompt_text "$STATE_FILE")"
@@ -340,6 +356,7 @@ rewrite_frontmatter_batch \
   "total_elapsed_ms=$(literal_or_null "$TOTAL_ELAPSED_MS")" \
   "last_event=continued" \
   "last_hook_fingerprint=${HOOK_FINGERPRINT_RAW}" \
+  "last_transcript_turn_fingerprint=${TRANSCRIPT_TURN_FINGERPRINT_RAW}" \
   "last_assistant_excerpt=${LAST_OUTPUT_EXCERPT_RAW}"
 
 if [[ -n "$COMPLETION_PROMISE" ]]; then

@@ -19,9 +19,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use Easy Loop to start or inspect the loop for this Codex session, asking for only the missing setup details.",
-      "Start an Easy Loop for this repo with safe defaults, a unique completion promise, and a truthful finish condition.",
-      "Explain whether this task is a good fit for Easy Loop before starting one, and show the current session status if a loop already exists."
+      "Use Easy Loop only after first checking the current session state when it already exists, and ask for only the missing setup details.",
+      "If starting a loop, show a startup draft first, require the literal word confirm, and do not call setup.sh before that confirmation.",
+      "Keep response shapes stable: bare $easy-loop should become an action picker or status, status replies should start with Current status:, cancel replies should start with I ran:, and activation replies should include state.md, iterations.jsonl, max-iterations, and the completion promise."
     ],
     "brandColor": "#0F766E"
   }

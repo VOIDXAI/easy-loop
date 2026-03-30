@@ -121,6 +121,7 @@ last_iteration_elapsed_ms: null
 total_elapsed_ms: 0
 last_event: started
 last_hook_fingerprint: null
+last_transcript_turn_fingerprint: null
 last_assistant_excerpt: null
 ---
 ${PROMPT}

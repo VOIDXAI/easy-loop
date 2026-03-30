@@ -41,6 +41,13 @@ Operate the Easy Loop plugin from the current repo.
   plain text instead of forcing multiple-choice prompts.
 - If you ask for a missing task goal in plain text, tell the user to reply with
   `$easy-loop <task goal>`.
+- For a bare `$easy-loop` response with no state, prefer a short action picker
+  that begins with `This session does not have an Easy Loop state file yet.`
+- For a startup-draft response, begin with `Here is the startup draft I would
+  use:`
+- For a status response, begin with `Current status: <status>`.
+- For a cancel response, begin with `I ran:` before reporting the cancellation
+  result.
 
 ## Start A Loop
 
@@ -106,6 +113,8 @@ bash ~/.codex/plugins/easy-loop/scripts/setup.sh \
   already finished.
 - For terminal sessions, summarize why it stopped, how long it ran, how many
   iterations it used, and the recent timings.
+- For terminal status responses, include one explicit stop-reason sentence
+  before the timing summary.
 - Treat `completed`, `cancelled`, `max_iterations_reached`, and `corrupted` as
   terminal statuses.
 - If the current session has no loop but other sessions do, mention the other
