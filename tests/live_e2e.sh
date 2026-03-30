@@ -129,6 +129,10 @@ cat >"$PLUGIN_ROOT/scripts/setup.sh" <<EOF
 
 set -euo pipefail
 
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./common.sh
+source "\$SCRIPT_DIR/common.sh"
+
 LOG_DIR="${LOG_DIR}"
 
 PROMPT_PARTS=()
@@ -162,7 +166,8 @@ done
 PROMPT="\${PROMPT_PARTS[*]:-}"
 SESSION_ID="\${CODEX_THREAD_ID:-live-e2e-missing-session}"
 NOW="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-SESSION_DIR=".codex/easy-loop/\${SESSION_ID}"
+TAG="\$(generate_unique_tag "\$PROMPT")"
+SESSION_DIR="\$(run_dir_for_tag "\$TAG")"
 STATE_FILE="\${SESSION_DIR}/state.md"
 ITERATIONS_FILE="\${SESSION_DIR}/iterations.jsonl"
 
@@ -371,6 +376,35 @@ thread_id_from_events() {
   printf '%s\n' "$thread_id"
 }
 
+find_session_dir() {
+  local repo="$1"
+  local thread_id="$2"
+  python3 - "$repo" "$thread_id" <<'PY'
+from pathlib import Path
+import json
+import re
+import sys
+
+repo = Path(sys.argv[1])
+thread_id = sys.argv[2]
+
+for path in sorted((repo / ".easy-loop").glob("*/state.md")):
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"^session_id:\s*(.+)$", text, flags=re.MULTILINE)
+    if not match:
+        continue
+    try:
+        value = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        continue
+    if value == thread_id:
+        print(path.parent.as_posix())
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
 prime_session() {
   local repo="$1"
   local prefix="$2"
@@ -400,7 +434,7 @@ write_state_file() {
   local prompt="${15}"
   local excerpt="${16}"
 
-  local session_dir="$repo/.codex/easy-loop/$thread_id"
+  local session_dir="$repo/.easy-loop/$thread_id"
   local state_file="$session_dir/state.md"
   mkdir -p "$session_dir"
 
@@ -459,7 +493,7 @@ write_iterations_file() {
   local repo="$1"
   local thread_id="$2"
   shift 2
-  local iterations_file="$repo/.codex/easy-loop/$thread_id/iterations.jsonl"
+  local iterations_file="$repo/.easy-loop/$thread_id/iterations.jsonl"
   : >"$iterations_file"
   while [[ $# -gt 0 ]]; do
     jq -nc \
@@ -607,7 +641,7 @@ run_scenario_cancel_active() {
     exit 1
   fi
 
-  state_file="$repo/.codex/easy-loop/$thread_id/state.md"
+  state_file="$(find_session_dir "$repo" "$thread_id")/state.md"
   assert_contains_regex "$last" 'cancel' 'cancel response should mention cancellation'
   assert_contains_regex "$state_file" '^status:\s*cancelled$' 'cancel should write cancelled status'
   assert_contains_regex "$state_file" '^active:\s*false$' 'cancel should deactivate the loop'
@@ -623,8 +657,8 @@ run_scenario_duplicate_message_payload() {
     "Keep working" ""
 
   payload="$(jq -nc --arg session_id "$thread_id" --arg last_assistant_message "Still working" --arg transcript_path "" '{session_id: $session_id, last_assistant_message: $last_assistant_message, transcript_path: $transcript_path}')"
-  state_file="$repo/.codex/easy-loop/$thread_id/state.md"
-  iterations_file="$repo/.codex/easy-loop/$thread_id/iterations.jsonl"
+  state_file="$(find_session_dir "$repo" "$thread_id")/state.md"
+  iterations_file="$(find_session_dir "$repo" "$thread_id")/iterations.jsonl"
 
   (
     cd "$repo"

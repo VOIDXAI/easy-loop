@@ -67,27 +67,56 @@ grep -q '\[plugins."easy-loop@local"\]' "$CODEX_HOME_DIR/config.toml"
 
 cd "$WORK_DIR"
 
+find_session_dir() {
+  local session_id="$1"
+  python3 - "$session_id" <<'PY'
+from pathlib import Path
+import json
+import re
+import sys
+
+session_id = sys.argv[1]
+state_root = Path(".easy-loop")
+
+for path in sorted(state_root.glob("*/state.md")):
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"^session_id:\s*(.+)$", text, flags=re.MULTILINE)
+    if not match:
+        continue
+    try:
+        value = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        continue
+    if value == session_id:
+        print(path.parent.as_posix())
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
 if env -u CODEX_THREAD_ID -u CODEX_SESSION_ID bash "$PLUGIN_ROOT/scripts/setup.sh" "missing session id" >/dev/null 2>&1; then
   echo "Smoke test failed: setup.sh should require CODEX_THREAD_ID." >&2
   exit 1
 fi
 
-SESSION_ONE_DIR=".codex/easy-loop/test-session"
-SESSION_TWO_DIR=".codex/easy-loop/other-session"
-SESSION_THREE_DIR=".codex/easy-loop/max-session"
-CONCURRENT_DIR=".codex/easy-loop/concurrent-session"
-STATUS_DIR=".codex/easy-loop/status-session"
-STATUS_MARKDOWN_DIR=".codex/easy-loop/status-markdown-session"
-CORRUPT_ITER_DIR=".codex/easy-loop/corrupt-iteration"
-CORRUPT_MAX_DIR=".codex/easy-loop/corrupt-max"
-CORRUPT_TIME_DIR=".codex/easy-loop/corrupt-time"
-CORRUPT_PROMPT_DIR=".codex/easy-loop/corrupt-prompt"
+SESSION_ONE_DIR=""
+SESSION_TWO_DIR=""
+SESSION_THREE_DIR=""
+CONCURRENT_DIR=""
+STATUS_DIR=""
+STATUS_MARKDOWN_DIR=""
+CORRUPT_ITER_DIR=""
+CORRUPT_MAX_DIR=""
+CORRUPT_TIME_DIR=""
+CORRUPT_PROMPT_DIR=""
 
 CODEX_THREAD_ID=test-session bash "$PLUGIN_ROOT/scripts/setup.sh" \
   "Fix the tests" \
   --max-iterations 3 \
   --completion-promise "DONE" >/dev/null
 
+SESSION_ONE_DIR="$(find_session_dir test-session)"
 test -f "$SESSION_ONE_DIR/state.md"
 test -f "$SESSION_ONE_DIR/iterations.jsonl"
 grep -q '^status: active$' "$SESSION_ONE_DIR/state.md"
@@ -99,6 +128,7 @@ CODEX_THREAD_ID=other-session bash "$PLUGIN_ROOT/scripts/setup.sh" \
   --max-iterations 2 \
   --completion-promise "OTHER_DONE" >/dev/null
 
+SESSION_TWO_DIR="$(find_session_dir other-session)"
 test -f "$SESSION_TWO_DIR/state.md"
 grep -q '^iteration: 1$' "$SESSION_TWO_DIR/state.md"
 
@@ -148,6 +178,7 @@ test "$(jq -s 'length' "$SESSION_TWO_DIR/iterations.jsonl")" = "1"
 test "$(tail -n 1 "$SESSION_TWO_DIR/iterations.jsonl" | jq -r '.event')" = "cancelled"
 
 CODEX_THREAD_ID=max-session bash "$PLUGIN_ROOT/scripts/setup.sh" "Hit the ceiling" --max-iterations 1 >/dev/null
+SESSION_THREE_DIR="$(find_session_dir max-session)"
 printf '%s' '{"session_id":"max-session","last_assistant_message":"Not done yet","transcript_path":""}' |
   bash "$PLUGIN_ROOT/scripts/stop-hook.sh" >/dev/null
 grep -q '^status: max_iterations_reached$' "$SESSION_THREE_DIR/state.md"
@@ -155,6 +186,7 @@ grep -q '^active: false$' "$SESSION_THREE_DIR/state.md"
 test "$(tail -n 1 "$SESSION_THREE_DIR/iterations.jsonl" | jq -r '.event')" = "max_iterations_reached"
 
 CODEX_THREAD_ID=concurrent-session bash "$PLUGIN_ROOT/scripts/setup.sh" "Handle one stop event once" --max-iterations 4 >/dev/null
+CONCURRENT_DIR="$(find_session_dir concurrent-session)"
 CONCURRENT_TRANSCRIPT="$WORK_DIR/concurrent-transcript.jsonl"
 cat >"$CONCURRENT_TRANSCRIPT" <<'EOF'
 {"role":"assistant","message":{"content":[{"type":"text","text":"Parallel work update"}]}}
@@ -171,6 +203,7 @@ test "$(jq -s 'length' "$CONCURRENT_DIR/iterations.jsonl")" = "1"
 test "$(jq -r '.event' "$CONCURRENT_DIR/iterations.jsonl")" = "continued"
 
 CODEX_THREAD_ID=status-session bash "$PLUGIN_ROOT/scripts/setup.sh" "Keep looping until done" --max-iterations 4 --completion-promise "STATUS_DONE" >/dev/null
+STATUS_DIR="$(find_session_dir status-session)"
 STATUS_TRANSCRIPT="$WORK_DIR/status-transcript.jsonl"
 cat >"$STATUS_TRANSCRIPT" <<'EOF'
 {"role":"user","message":{"content":[{"type":"text","text":"$easy-loop status"}]}}
@@ -184,6 +217,7 @@ grep -q '^iteration: 1$' "$STATUS_DIR/state.md"
 test "$(jq -s 'length' "$STATUS_DIR/iterations.jsonl")" = "0"
 
 CODEX_THREAD_ID=status-markdown-session bash "$PLUGIN_ROOT/scripts/setup.sh" "Keep looping until done" --max-iterations 4 --completion-promise "STATUS_DONE" >/dev/null
+STATUS_MARKDOWN_DIR="$(find_session_dir status-markdown-session)"
 STATUS_MARKDOWN_PAYLOAD="$(jq -nc --arg session_id "status-markdown-session" --arg last_assistant_message $'**Easy Loop Status**\n\n- `status`: `active`\n- `iteration`: `1` of `4`' '{session_id: $session_id, last_assistant_message: $last_assistant_message, transcript_path: ""}')"
 STATUS_MARKDOWN_HOOK_OUTPUT="$(printf '%s' "$STATUS_MARKDOWN_PAYLOAD" | bash "$PLUGIN_ROOT/scripts/stop-hook.sh")"
 test -z "$STATUS_MARKDOWN_HOOK_OUTPUT"
@@ -192,12 +226,14 @@ grep -q '^iteration: 1$' "$STATUS_MARKDOWN_DIR/state.md"
 test "$(jq -s 'length' "$STATUS_MARKDOWN_DIR/iterations.jsonl")" = "0"
 
 CODEX_THREAD_ID=test-session bash "$PLUGIN_ROOT/scripts/setup.sh" "Fresh run" --max-iterations 2 >/dev/null
+SESSION_ONE_DIR="$(find_session_dir test-session)"
 grep -q '^status: active$' "$SESSION_ONE_DIR/state.md"
 grep -q '^iteration: 1$' "$SESSION_ONE_DIR/state.md"
 test "$(jq -s 'length' "$SESSION_ONE_DIR/iterations.jsonl")" = "0"
 grep -q '^status: cancelled$' "$SESSION_TWO_DIR/state.md"
 
 CODEX_THREAD_ID=corrupt-iteration bash "$PLUGIN_ROOT/scripts/setup.sh" "Bad iteration" --max-iterations 2 >/dev/null
+CORRUPT_ITER_DIR="$(find_session_dir corrupt-iteration)"
 python3 - "$CORRUPT_ITER_DIR/state.md" <<'PY'
 from pathlib import Path
 import sys
@@ -213,6 +249,7 @@ grep -q '^active: false$' "$CORRUPT_ITER_DIR/state.md"
 test "$(jq -s 'length' "$CORRUPT_ITER_DIR/iterations.jsonl")" = "0"
 
 CODEX_THREAD_ID=corrupt-max bash "$PLUGIN_ROOT/scripts/setup.sh" "Bad max" --max-iterations 2 >/dev/null
+CORRUPT_MAX_DIR="$(find_session_dir corrupt-max)"
 python3 - "$CORRUPT_MAX_DIR/state.md" <<'PY'
 from pathlib import Path
 import sys
@@ -228,6 +265,7 @@ grep -q '^active: false$' "$CORRUPT_MAX_DIR/state.md"
 test "$(jq -s 'length' "$CORRUPT_MAX_DIR/iterations.jsonl")" = "0"
 
 CODEX_THREAD_ID=corrupt-time bash "$PLUGIN_ROOT/scripts/setup.sh" "Missing timestamps" --max-iterations 2 >/dev/null
+CORRUPT_TIME_DIR="$(find_session_dir corrupt-time)"
 python3 - "$CORRUPT_TIME_DIR/state.md" <<'PY'
 from pathlib import Path
 import re
@@ -246,6 +284,7 @@ grep -q '^active: false$' "$CORRUPT_TIME_DIR/state.md"
 test "$(jq -s 'length' "$CORRUPT_TIME_DIR/iterations.jsonl")" = "0"
 
 CODEX_THREAD_ID=corrupt-prompt bash "$PLUGIN_ROOT/scripts/setup.sh" "Prompt will disappear" --max-iterations 2 >/dev/null
+CORRUPT_PROMPT_DIR="$(find_session_dir corrupt-prompt)"
 python3 - "$CORRUPT_PROMPT_DIR/state.md" <<'PY'
 from pathlib import Path
 import sys

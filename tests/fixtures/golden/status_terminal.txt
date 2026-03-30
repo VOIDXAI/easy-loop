@@ -4,8 +4,8 @@ $easy-loop status
 Codex:
 Current status: completed
 The loop stopped because the completion promise matched.
-State file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/state.md
-Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iterations.jsonl
+State file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/state.md
+Iterations file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/iterations.jsonl
 Total elapsed: 1m 43s
 Iteration records: 2
 Recent per-iteration timings:

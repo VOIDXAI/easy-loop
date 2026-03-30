@@ -79,13 +79,12 @@ if [[ -z "$SESSION_ID" ]]; then
 fi
 
 ensure_cleanup_trap
-acquire_session_lock "$SESSION_ID"
+acquire_session_setup_lock "$SESSION_ID"
 
-SESSION_DIR="$(session_dir_for "$SESSION_ID")"
-STATE_FILE="$(state_file_for "$SESSION_ID")"
-ITERATIONS_FILE="$(iterations_file_for "$SESSION_ID")"
-
-if [[ -f "$STATE_FILE" ]]; then
+EXISTING_DIR=""
+if EXISTING_DIR="$(find_session_dir "$SESSION_ID")"; then
+  acquire_run_lock "$EXISTING_DIR"
+  STATE_FILE="$(state_file_for_run_dir "$EXISTING_DIR")"
   EXISTING_STATUS="$(frontmatter_value "$STATE_FILE" "status")"
   EXISTING_ACTIVE="$(frontmatter_value "$STATE_FILE" "active")"
   if [[ "$EXISTING_STATUS" == "active" || "$EXISTING_ACTIVE" == "true" ]]; then
@@ -93,12 +92,16 @@ if [[ -f "$STATE_FILE" ]]; then
     echo "Cancel it first with: bash ~/.codex/plugins/easy-loop/scripts/cancel.sh" >&2
     exit 1
   fi
-  rm -rf "$SESSION_DIR"
-elif [[ -d "$SESSION_DIR" ]]; then
-  rm -rf "$SESSION_DIR"
+  rm -rf "$EXISTING_DIR"
 fi
 
+TAG="$(generate_unique_tag "$PROMPT")"
+SESSION_DIR="$(run_dir_for_tag "$TAG")"
+STATE_FILE="$(state_file_for_run_dir "$SESSION_DIR")"
+ITERATIONS_FILE="$(iterations_file_for_run_dir "$SESSION_DIR")"
+
 mkdir -p "$SESSION_DIR"
+acquire_run_lock "$SESSION_DIR"
 : >"$ITERATIONS_FILE"
 
 NOW="$(timestamp_now)"

@@ -4,8 +4,8 @@ $easy-loop
 Codex:
 Current status: completed
 Current iteration: 2 of 5
-State file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/state.md
-Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iterations.jsonl
+State file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/state.md
+Iterations file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/iterations.jsonl
 Recent per-iteration timings:
 - iteration 1: continued (18342 ms)
 - iteration 2: completed (9411 ms)

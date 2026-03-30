@@ -146,10 +146,15 @@ fi
 
 ensure_cleanup_trap
 
-STATE_FILE="$(state_file_for "$HOOK_SESSION")"
-ITERATIONS_FILE="$(iterations_file_for "$HOOK_SESSION")"
+SESSION_DIR="$(find_session_dir "$HOOK_SESSION" || true)"
+if [[ -z "$SESSION_DIR" ]]; then
+  exit 0
+fi
 
-acquire_session_lock "$HOOK_SESSION"
+STATE_FILE="$(state_file_for_run_dir "$SESSION_DIR")"
+ITERATIONS_FILE="$(iterations_file_for_run_dir "$SESSION_DIR")"
+
+acquire_run_lock "$SESSION_DIR"
 
 if [[ ! -f "$STATE_FILE" ]]; then
   exit 0

@@ -22,8 +22,9 @@ bash ~/.codex/plugins/easy-loop/scripts/setup.sh \
   --completion-promise "README_SKILL_EXAMPLE_AND_SMOKE_PASS"
 
 Easy Loop activated.
-State file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/state.md
-Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iterations.jsonl
+Session directory: .easy-loop/update-readme-md-with-a-complete-skill-trigger
+State file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/state.md
+Iterations file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/iterations.jsonl
 Max iterations: 5
 Completion promise: README_SKILL_EXAMPLE_AND_SMOKE_PASS
 Session id: 019d2e0c-05a0-7fc2-9550-256dc58e2ca8

@@ -66,10 +66,16 @@ if [[ "$FORCE" -eq 0 ]]; then
 fi
 
 ensure_cleanup_trap
-acquire_session_lock "$TARGET_SESSION"
+SESSION_DIR="$(find_session_dir "$TARGET_SESSION" || true)"
+if [[ -z "$SESSION_DIR" ]]; then
+  echo "No Easy Loop state was found for session ${TARGET_SESSION} in ${STATE_ROOT}."
+  exit 0
+fi
 
-STATE_FILE="$(state_file_for "$TARGET_SESSION")"
-ITERATIONS_FILE="$(iterations_file_for "$TARGET_SESSION")"
+acquire_run_lock "$SESSION_DIR"
+
+STATE_FILE="$(state_file_for_run_dir "$SESSION_DIR")"
+ITERATIONS_FILE="$(iterations_file_for_run_dir "$SESSION_DIR")"
 
 if [[ ! -f "$STATE_FILE" ]]; then
   echo "No Easy Loop state was found for session ${TARGET_SESSION} in ${STATE_ROOT}."

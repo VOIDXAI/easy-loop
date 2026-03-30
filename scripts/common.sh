@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-DEFAULT_STATE_ROOT=".codex/easy-loop"
+DEFAULT_STATE_ROOT=".easy-loop"
 STATE_ROOT="${EASY_LOOP_STATE_ROOT:-$DEFAULT_STATE_ROOT}"
 EASY_LOOP_SESSION_LOCK_TIMEOUT_SECONDS="${EASY_LOOP_SESSION_LOCK_TIMEOUT_SECONDS:-15}"
 EASY_LOOP_CLEANUP_TRAP_SET=0
-EASY_LOOP_HELD_SESSION_LOCK=""
 EASY_LOOP_CLEANUP_PATHS=()
+EASY_LOOP_TAG_MAX_WORDS=8
+EASY_LOOP_TAG_MAX_LENGTH=48
 
 require_cmd() {
   local cmd="$1"
@@ -63,33 +64,37 @@ easy_loop_cleanup_paths() {
   done
 }
 
-session_dir_for() {
-  local session_id="$1"
-  printf '%s/%s\n' "${STATE_ROOT%/}" "$session_id"
+run_dir_for_tag() {
+  local tag="$1"
+  printf '%s/%s\n' "${STATE_ROOT%/}" "$tag"
 }
 
-state_file_for() {
-  local session_id="$1"
-  printf '%s/state.md\n' "$(session_dir_for "$session_id")"
+state_file_for_run_dir() {
+  local run_dir="$1"
+  printf '%s/state.md\n' "${run_dir%/}"
 }
 
-iterations_file_for() {
-  local session_id="$1"
-  printf '%s/iterations.jsonl\n' "$(session_dir_for "$session_id")"
+iterations_file_for_run_dir() {
+  local run_dir="$1"
+  printf '%s/iterations.jsonl\n' "${run_dir%/}"
 }
 
-session_lock_path_for() {
-  local session_id="$1"
-  printf '%s/%s.lock\n' "${STATE_ROOT%/}" "$session_id"
+run_lock_path_for_dir() {
+  local run_dir="$1"
+  printf '%s/.lock\n' "${run_dir%/}"
 }
 
-acquire_session_lock() {
+session_setup_lock_path_for() {
   local session_id="$1"
-  local lock_path
+  printf '%s/.setup-%s.lock\n' "${STATE_ROOT%/}" "$session_id"
+}
+
+acquire_lock_path() {
+  local lock_path="$1"
+  local label="$2"
   local deadline
   local owner_pid
 
-  lock_path="$(session_lock_path_for "$session_id")"
   mkdir -p "$(dirname "$lock_path")"
   deadline=$((SECONDS + EASY_LOOP_SESSION_LOCK_TIMEOUT_SECONDS))
 
@@ -104,14 +109,100 @@ acquire_session_lock() {
       continue
     fi
     if (( SECONDS >= deadline )); then
-      echo "Error: timed out waiting for Easy Loop session lock for ${session_id}." >&2
+      echo "Error: timed out waiting for ${label}." >&2
       return 1
     fi
     sleep 0.05
   done
 
-  EASY_LOOP_HELD_SESSION_LOCK="$lock_path"
   track_cleanup_path "$lock_path"
+}
+
+acquire_session_setup_lock() {
+  local session_id="$1"
+  acquire_lock_path "$(session_setup_lock_path_for "$session_id")" "Easy Loop setup lock for session ${session_id}"
+}
+
+acquire_run_lock() {
+  local run_dir="$1"
+  acquire_lock_path "$(run_lock_path_for_dir "$run_dir")" "Easy Loop run lock for ${run_dir}"
+}
+
+slugify_task_to_tag() {
+  local prompt="$1"
+  python3 - "$prompt" "$EASY_LOOP_TAG_MAX_WORDS" "$EASY_LOOP_TAG_MAX_LENGTH" <<'PY'
+import re
+import sys
+
+prompt = sys.argv[1]
+max_words = int(sys.argv[2])
+max_length = int(sys.argv[3])
+
+words = re.findall(r"[a-z0-9]+", prompt.lower())
+slug = "-".join(words[:max_words]).strip("-")
+if not slug:
+    slug = "run"
+if len(slug) > max_length:
+    slug = slug[:max_length].rstrip("-")
+if not slug:
+    slug = "run"
+print(slug)
+PY
+}
+
+generate_unique_tag() {
+  local prompt="$1"
+  local base_tag
+  local candidate
+  local suffix
+
+  base_tag="$(slugify_task_to_tag "$prompt")"
+  candidate="$base_tag"
+  suffix=2
+
+  while [[ -e "$(run_dir_for_tag "$candidate")" ]]; do
+    candidate="${base_tag}-${suffix}"
+    suffix=$((suffix + 1))
+  done
+
+  printf '%s\n' "$candidate"
+}
+
+find_session_dir() {
+  local session_id="$1"
+  local state_file
+  local raw_session_id
+  local candidate_session_id
+
+  shopt -s nullglob
+  local state_files=("${STATE_ROOT%/}"/*/state.md)
+  shopt -u nullglob
+
+  for state_file in "${state_files[@]}"; do
+    [[ -f "$state_file" ]] || continue
+    raw_session_id="$(frontmatter_value "$state_file" "session_id")"
+    candidate_session_id="$(decode_json_string "$raw_session_id" 2>/dev/null || true)"
+    if [[ "$candidate_session_id" == "$session_id" ]]; then
+      dirname "$state_file"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+state_file_for_session() {
+  local session_id="$1"
+  local run_dir
+  run_dir="$(find_session_dir "$session_id")" || return 1
+  state_file_for_run_dir "$run_dir"
+}
+
+iterations_file_for_session() {
+  local session_id="$1"
+  local run_dir
+  run_dir="$(find_session_dir "$session_id")" || return 1
+  iterations_file_for_run_dir "$run_dir"
 }
 
 frontmatter() {

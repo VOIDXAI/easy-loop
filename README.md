@@ -6,7 +6,7 @@ current repo.
 
 ## What It Does
 
-- Persists per-session loop state under `.codex/easy-loop/<session_id>/`
+- Persists per-session loop state under `.easy-loop/<tag>/`
 - Uses a Codex `Stop` hook to intercept normal completion
 - Replays the same prompt until either:
   - a truthful `<promise>...</promise>` is emitted
@@ -90,20 +90,21 @@ A simplified flow looks like this:
 User task
   -> Codex skill/plugin
   -> setup.sh
-  -> .codex/easy-loop/<session_id>/state.md
+  -> .easy-loop/<tag>/state.md
   -> Codex works on the repo
   -> Stop hook fires on normal completion
   -> Easy Loop checks promise / iteration budget / cancel state
   -> continue same prompt or stop cleanly
 ```
 
-Each Codex session gets its own state directory:
+Each Easy Loop run gets its own state directory:
 
-- `.codex/easy-loop/<session_id>/state.md`
-- `.codex/easy-loop/<session_id>/iterations.jsonl`
+- `.easy-loop/<tag>/state.md`
+- `.easy-loop/<tag>/iterations.jsonl`
 
-That allows multiple Codex sessions in the same repo to run independent Easy
-Loop sessions without touching each other.
+Easy Loop still tracks the owning Codex session through the `session_id`
+frontmatter inside `state.md`, so multiple Codex sessions in the same repo can
+run independent loops without touching each other.
 
 ### Complete Skill Example
 
@@ -141,9 +142,9 @@ bash ~/.codex/plugins/easy-loop/scripts/setup.sh \
   --completion-promise "README_SKILL_EXAMPLE_AND_SMOKE_PASS"
 
 Easy Loop activated.
-Session directory: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8
-State file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/state.md
-Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iterations.jsonl
+Session directory: .easy-loop/update-readme-md-with-a-complete-skill-trigger
+State file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/state.md
+Iterations file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/iterations.jsonl
 Iteration: 1
 Max iterations: 5
 Completion promise: README_SKILL_EXAMPLE_AND_SMOKE_PASS
@@ -156,8 +157,8 @@ $easy-loop status
 Codex:
 Current status: active
 Current iteration: 2 of 5
-State file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/state.md
-Iterations file: .codex/easy-loop/019d2e0c-05a0-7fc2-9550-256dc58e2ca8/iterations.jsonl
+State file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/state.md
+Iterations file: .easy-loop/update-readme-md-with-a-complete-skill-trigger/iterations.jsonl
 Recent per-iteration timings:
 - iteration 1: continued (18342 ms)
 
@@ -260,8 +261,8 @@ Most likely cause: the last run ended normally, hit max iterations, or was
 cancelled, and the session state was intentionally preserved for inspection.
 
 First check:
-- inspect `.codex/easy-loop/<session_id>/state.md`
-- inspect `.codex/easy-loop/<session_id>/iterations.jsonl`
+- inspect `.easy-loop/<tag>/state.md`
+- inspect `.easy-loop/<tag>/iterations.jsonl`
 - start a fresh loop only after confirming the old state is terminal
 
 ## Cancel A Loop
@@ -319,7 +320,7 @@ of assuming it always exists.
 - The plugin is the distribution layer. Easy Loop still depends on a separate
   `Stop` hook in `hooks.json`, because hooks are not part of the documented
   plugin component set yet.
-- New loops write per-session state to `.codex/easy-loop/<session_id>/`.
+- New loops write per-session state to `.easy-loop/<tag>/`.
 - Terminal state is preserved on disk so the current session can inspect its
   last run; the next `setup.sh` for that same session clears the previous run
   before starting a new one.

@@ -20,7 +20,7 @@ Operate the Easy Loop plugin from the current repo.
 - Read `README.md` only when the user asks about installation, publishing, or
   repository-level documentation.
 - Use the current working directory when reading or writing
-  `.codex/easy-loop/<session_id>/`.
+  `.easy-loop/<tag>/`.
 
 ## Interaction
 
@@ -51,8 +51,8 @@ Operate the Easy Loop plugin from the current repo.
 
 ## Start A Loop
 
-- Before starting, read `.codex/easy-loop/$CODEX_THREAD_ID/state.md` when it
-  exists.
+- Before starting, scan `.easy-loop/*/state.md` for a run whose `session_id`
+  matches `$CODEX_THREAD_ID` when it exists.
 - If the current session is already active, report status instead of starting a
   second loop.
 - If the task is missing or too vague, ask for the task goal first.
@@ -104,9 +104,9 @@ bash ~/.codex/plugins/easy-loop/scripts/setup.sh \
 ## Monitor A Loop
 
 - For the current session, read:
-  - `.codex/easy-loop/$CODEX_THREAD_ID/state.md`
-  - `.codex/easy-loop/$CODEX_THREAD_ID/iterations.jsonl`
-- If the current session has no state file, scan `.codex/easy-loop/*/state.md`
+  - the matching `.easy-loop/<tag>/state.md`
+  - the matching `.easy-loop/<tag>/iterations.jsonl`
+- If the current session has no state file, scan `.easy-loop/*/state.md`
   to see whether other Codex sessions in the same repo still have loops.
 - When reporting status, prioritize current status, current iteration, total
   elapsed time, recent per-iteration timings, and a terminal summary if the loop
@@ -139,7 +139,7 @@ bash ~/.codex/plugins/easy-loop/scripts/cancel.sh --session-id <id> --force
 - Do not emit the promise until it is fully true.
 - Keep the final summary short and outcome-focused so the saved state stays easy
   to scan.
-- Per-session state lives under `.codex/easy-loop/<session_id>/`.
+- Per-session state lives under `.easy-loop/<tag>/`.
 - Prefer setting `--max-iterations` even when a completion promise exists.
 - Remember that the Stop hook compares the emitted promise text against the
   configured promise exactly after normalizing whitespace.
