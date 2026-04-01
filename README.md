@@ -344,3 +344,7 @@ bash tests/smoke.sh
 ```
 
 GitHub Actions runs the same smoke test on pushes and pull requests.
+
+## License
+
+MIT. See `LICENSE`.

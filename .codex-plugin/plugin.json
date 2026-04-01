@@ -3,16 +3,21 @@
   "version": "0.2.0",
   "description": "A Stop-hook powered Easy Loop for Codex CLI that keeps retrying the same task until a promise or iteration limit is reached.",
   "keywords": [
+    "agentic-coding",
+    "automation",
+    "cli-plugin",
     "codex",
-    "hooks",
-    "automation"
+    "codex-cli",
+    "codex-plugin",
+    "developer-tools",
+    "hooks"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Easy Loop",
     "shortDescription": "Iterative self-loop for Codex",
     "longDescription": "Runs an Easy Loop inside Codex using a Stop hook, persistent task state, and repeatable completion conditions.",
-    "developerName": "Open Source",
+    "developerName": "VOIDXAI",
     "category": "Development",
     "capabilities": [
       "Interactive",
